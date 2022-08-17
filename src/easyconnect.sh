@@ -7,7 +7,8 @@ sleep ${1:-5}
 EasyConnectDir=${EasyConnectDir:-/usr/share/sangfor/EasyConnect}
 ResourcesDir=${EasyConnectDir}/resources
 EASYCONN=${ResourcesDir}/bin/easyconn
-
+DANTEDCONF=/etc/danted.conf
+[ -f /etc/danted.conf ] || DANTEDCONF=/etc/sockd.conf
 ## run cmd in ${ResourcesDir}/bin
 ## from sslservice.sh EasyMonitor.sh
 run_cmd() {
@@ -38,13 +39,28 @@ run_cmd() {
 ## run CLI EC cmd easyconn
 start_easyconn() {
     local params="-v "
+    [ -n "$QUIET" ] && params=" "
     #[ -n "$ECADDRESS" ] && params+=" -d $ECADDRESS"
     #[ -n "$ECUSER" ] && params+=" -u $ECUSER"
     #[ -n "$ECPASSWD" ] && params+=" -p $ECPASSWD"
     params+="$CLI_OPTS"
-    echo "Run CMD: $EASYCONN login $params"
-    $EASYCONN login $params && echo login success \
-    || ($EASYCONN logout; sleep 3;$EASYCONN login $params;)
+    [ -n "$QUIET" ] || echo "Run CMD: $EASYCONN login $params"
+    k=5
+    (while [ ${k} -ge 0 ]; do
+        if [ -n "$QUIET" ]; then
+            $EASYCONN login $params | grep FAILED
+        else
+            $EASYCONN login $params |tee| grep FAILED
+        fi
+        if [ $? -ne 0 ]; then
+            break
+        else
+	        echo -e "\login failed, try again\n"
+            $EASYCONN logout;
+        fi
+        sleep 3
+    done)
+    [ ${k} -ge 0 ] && echo login success ||exit 10
 }
 
 ## from github.com/Hagb/docker-easyconnect/ start.sh
@@ -90,11 +106,14 @@ hook_iptables() { #{{{
     ( while true; do sleep 5 ; iptables -D SANGFOR_VIRTUAL -j DROP 2>/dev/null ; done ) &
 } #}}}
 
+hook_tinyproxy() {
+:
+}
 ## from github.com/Hagb/docker-easyconnect/ start.sh
 hook_danted() { #{{{
     local interface=${1:-tun0}
-    echo "Run hook_danted"
-    cat >/etc/danted.conf <<EOF
+    echo "Run hook_danted with ${DANTEDCONF}"
+    cat >${DANTEDCONF} <<EOF
 internal: eth0 port = 1080
 external: ${interface}
 external: eth0
@@ -102,7 +121,7 @@ external: lo
 external.rotation: route
 socksmethod: none
 clientmethod: none
-user.privileged: proxy
+user.privileged: root
 user.notprivileged: nobody
 client pass {
     from: 0.0.0.0/0 to: 0.0.0.0/0
@@ -113,13 +132,23 @@ socks pass {
 EOF
     pidof sockd >/dev/null && killall sockd
     pidof sockd >/dev/null && killall -9 sockd
+    # 增加身份验证 https://github.com/Hagb/docker-easyconnect
+    if [[ -n "$SOCKS_PASSWD" && -n "$SOCKS_USER" ]];then
+        cat >${DANTEDCONF} <<EOF
+auth required pam_pwdfile.so pwdfile /etc/dante.passwd
+account required pam_permit.so
+EOF
+        echo "$SOCKS_USER:$(mkpasswd --method=md5 $SOCKS_PASSWD)">/etc/dante.passwd
+        sed -i 's/socksmethod: none/socksmethod: pam.username/g' ${DANTEDCONF}
+        [ -n "$QUIET" ] &&  echo "use socks5 auth: $SOCKS_USER" || echo "use socks5 auth: $SOCKS_USER:$SOCKS_PASSWD"
+    fi
     (while true; do
-        sleep 3
         if [ -d /sys/class/net/${interface} ]; then
-            sockd -D -f /etc/danted.conf
-	    echo "start dantd"
+            sockd -D -f ${DANTEDCONF}
+	        echo -e "\nstart danted\n"
             break
         fi
+        sleep 3
     done) &
 } #}}}
 
@@ -151,16 +180,22 @@ main() {
     [ -n "$IPTABLES_LEGACY" ] && hook_iptables tun0 # IPTABLES_LEGACY=
 
     run_cmd ECAgent background --resume
-    [ -n "$NODANTED" ] || (hook_danted tun0 && echo 'dantd')  # -p xxx:1080
     start_easyconn
+    [ -n "$NODANTED" ] || hook_danted tun0  # -p xxx:1080
+    [ -n "$NOtinyproxy" ] || hook_tinyproxy tun0  # -p xxx:1080
     
-    $EASYCONN login query
+    [ -n "$QUIET" ] || $EASYCONN query
     
     keep='K'
-    while [ x"$keep" != x'XXX' ]; do
+    while true; do
         read -p " -> Enter 'XXX' to exit:" keep
+        if [ x"$keep" != x'XXX' ]; then
+            $keep
+	    else
+            break
+        fi
     done
-    echo "Run CMD: ${EASYCONN} logout"
+    [ -n "$QUIET" ] || echo "Run CMD: ${EASYCONN} logout"
     $EASYCONN logout
 }
 

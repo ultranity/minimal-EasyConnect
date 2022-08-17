@@ -2,7 +2,7 @@
 
 # Drop documents, keep copyright
 path-exclude /usr/share/doc/*
-path-include /usr/share/doc/*/copyright
+#path-include /usr/share/doc/*/copyright
 
 # Drop all manual pages
 path-exclude /usr/share/man/*

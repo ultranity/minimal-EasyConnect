@@ -5,26 +5,16 @@ LABEL maintainer="ultraxz@qq.com" \
       ec.versions="7.6.3 7.6.7 7.6.8 CLI" \
       description="alpine with EasyConnect CLI & run prerequisites"
       
-ENV LANG=C.UTF-8 LC_ALL=C.UTF-8 \
-    LD_LIBRARY_PATH=/usr/local/lib:/usr/glibc-compat/lib:/usr/lib:/lib \
-    PATH=/usr/glibc-compat/sbin:/usr/glibc-compat/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin \
-    GLIBC_REPO=https://github.com/sgerrand/alpine-pkg-glibc \
-    GLIBC_VERSION=2.34-r0
+ENV LANG=C.UTF-8 LC_ALL=C.UTF-8
 
-RUN addgroup -S proxy && adduser -S -G proxy proxy
+ADD ./easyconn_resources_x64_7.6-378.tar.gz /usr/share/sangfor/EasyConnect/
 RUN sed -i "s/dl-cdn.alpinelinux.org/mirrors.aliyun.com/g" /etc/apk/repositories \
-    && sed -i "s/alpine.gliderlabs.com/mirrors.aliyun.com/g" /etc/apk/repositories \
     && apk update \
-    && wget -q -O /etc/apk/keys/sgerrand.rsa.pub https://alpine-pkgs.sgerrand.com/sgerrand.rsa.pub \
-    && for pkg in glibc-${GLIBC_VERSION} glibc-bin-${GLIBC_VERSION}; \
-        do wget -q ${GLIBC_REPO}/releases/download/${GLIBC_VERSION}/${pkg}.apk -O /tmp/${pkg}.apk; done \
-    && apk add /tmp/glibc*.apk \
-    && rm -v /tmp/glibc*.apk \
-    && apk add libstdc++ bash busybox iptables tini psmisc dante-server \
-    && rm -rf /var/cache/apk/*
+    && apk add libstdc++ gcompat bash iptables tini psmisc dante-server \
+    && rm -rf /var/cache/apk/* \
+    && addgroup -S proxy && adduser -S -G proxy proxy
 
-ADD --chown=0:0 ./easyconn_resources_x64_7.6-378.tar.gz /usr/share/sangfor/EasyConnect/
-ADD --chown=0:0 ./easyconnect.sh /usr/bin/easyconnect.sh
+ADD ./easyconnect.sh /usr/bin/easyconnect.sh
 # RUN chmod +x /usr/bin/easyconnect.sh && /usr/share/sangfor/EasyConnect/change_authority.sh
 
 ENTRYPOINT ["/sbin/tini", "--"]
