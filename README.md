@@ -1,7 +1,7 @@
-# Easyconnect-alpine
+# minimal-Easyconnect
 
-基于 docker-alpine 的最小化Easyconnect CLI镜像，使用dante-server提供socks连接
-移植&修改自 https://github.com/shmilee/scripts/tree/master/easyconnect-in-docker
+基于 docker 的最小化Easyconnect CLI镜像，使用dante-server提供socks连接
+主要移植&修改自 https://github.com/shmilee/scripts/tree/master/easyconnect-in-docker，以及https://github.com/Hagb/docker-easyconnect
 体积变化：打包65.52 MB(shmilee)->36.71 MB(Hagb)->15.6MB, 解压后 ~130MB(shmilee)->~100MB(Hagb)->41.6MB
 
 练习docker压榨打包产物，不考虑VNC/浏览器登录问题
@@ -15,6 +15,7 @@ ultranity/easyconnect:buster 采用shmilee方案基础上优化
 
 ## 可能问题
 [] alpine镜像在部分host上出现futex error
+[] 未移植的[docker-easyconnect][1]中的修复
 
 
 ## 结构
@@ -26,10 +27,11 @@ ultranity/easyconnect:buster 采用shmilee方案基础上优化
 │   ├── Dockerfile.cli.buster:优化版原镜像， 解压后96.5MB
 │   ├── Dockerfile.cli.distroless: 构建distroless镜像，解压后64MB
 │   ├── dpkg.cfg.excludes
-│   ├── easyconnect.sh : 主逻辑 from [1][1] and [2][2]
+│   ├── easyconnect.sh : 主逻辑 from [docker-easyconnect][1] and [easyconnect-in-docker][2]
 │   ├── easyconn_resources_x64_7.6-378.tar.gz : ec资源包 packed from get_cli_resources.sh, 7.85MB
 │   ├── get_cli_resources.sh : 下载并打包ec资源包
 │   └── readme.md
+├── Dockerfile.dev : 开发用基础镜像
 ├── Dockerfile.alpine : alpine-glibc 基础镜像
 ├── Dockerfile.debfetch : alpine-glibc 基础镜像
 └── README.md
