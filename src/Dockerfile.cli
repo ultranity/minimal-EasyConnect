@@ -44,13 +44,14 @@ RUN rm -r /usr/share/doc/ /usr/share/man/  /usr/share/info/  /usr/share/common-l
     
 
 
-#FROM scratch
+FROM scratch
 ADD ./easyconn_resources_x64_7.6-378.tar.gz /usr/share/sangfor/EasyConnect/
-#COPY --from=runtime / /
+COPY --from=runtime / /
 ADD ./easyconnect.sh /usr/bin/easyconnect.sh
 
 ENV LANG=C.UTF-8 \
     PATH=/usr/share/sangfor/EasyConnect/resources/bin;$PATH
+# LC_ALL=C.UTF-8
 # Use a non-root user: slightly more secure (defense in depth)
 #USER nobody
 WORKDIR /

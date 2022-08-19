@@ -1,0 +1,17 @@
+# Extract dependencies
+#FROM busybox:glibc as busybox
+#RUN for j in busybox --list-full; do \
+#    mkdir -p $j && ln -s /bin/busybox $j; done
+    
+FROM debian:buster-slim AS deb_extractor
+ENV LANG=C.UTF-8 LC_ALL=C.UTF-8 \
+    DEBIAN_CODENAME=buster \
+    DEBIAN_MIRROR=http://mirrors.163.com/debian
+    
+COPY dpkg.cfg.excludes /etc/dpkg/dpkg.cfg.d/01_excludes
+#COPY ./getdeps.sh /tmp/getdeps.sh
+#RUN ./getdeps.sh adduser libgcc1 libc6 libstdc++6 tini busybox iptables psmisc dante-server
+RUN echo "deb $DEBIAN_MIRROR $DEBIAN_CODENAME main contrib" > /etc/apt/sources.list \
+    && apt-get update \
+    && apt install busybox apt-rdepends apt-file \
+    && apt-file update

@@ -47,15 +47,21 @@ start_easyconn() {
     [ -n "$QUIET" ] || echo "Run CMD: $EASYCONN login $params"
     k=5
     (while [ ${k} -ge 0 ]; do
+        local flag=0
         if [ -n "$QUIET" ]; then
-            $EASYCONN login $params | grep FAILED
+            $EASYCONN login $params | grep -i FAIL
+            flag=$?
         else
-            $EASYCONN login $params |tee| grep FAILED
+            echo "trying to login for less than ${k} times"
+            $EASYCONN login $params |tee /tmp/login.log
+            cat /tmp/login.log | grep -i FAIL
+            flag=$?
+            rm /tmp/login.log
         fi
-        if [ $? -ne 0 ]; then
+        if [ $flag -ne 0 ]; then
             break
         else
-	        echo -e "\login failed, try again\n"
+            echo -e "\login failed, try again\n"
             $EASYCONN logout;
         fi
         sleep 3
@@ -66,16 +72,16 @@ start_easyconn() {
 ## from github.com/Hagb/docker-easyconnect/ start.sh
 hook_iptables() { #{{{
     local interface=${1:-tun0}
-    echo "Run hook_iptables"
+    [ -n "$QUIET" ] || echo "Run hook_iptables"
     # 不支持 nftables 时使用 iptables-legacy
     # 感谢 @BoringCat https://github.com/Hagb/docker-easyconnect/issues/5
     if { [ -z "$IPTABLES_LEGACY" ] && iptables-nft -L 1>/dev/null 2>/dev/null ;}
     then
-        update-alternatives --set iptables /sbin/iptables-nft
-        update-alternatives --set ip6tables /sbin/ip6tables-nft
+        ln -sf /usr/sbin/iptables-nft /usr/sbin/iptables 
+        ln -sf /sbin/ip6tables-nft /usr/sbin/ip6tables 
     else
-        update-alternatives --set iptables /sbin/iptables-legacy
-        update-alternatives --set ip6tables /sbin/ip6tables-legacy
+        ln -sf /usr/sbin/iptables-legacy /usr/sbin/iptables
+        ln -sf /usr/sbin/ip6tables-legacy /usr/sbin/ip6tables 
     fi
 
     # https://github.com/Hagb/docker-easyconnect/issues/20
@@ -110,7 +116,7 @@ hook_tinyproxy() {
 :
 }
 ## from github.com/Hagb/docker-easyconnect/ start.sh
-hook_danted() { #{{{
+hook_danted() {  #{{{
     local interface=${1:-tun0}
     echo "Run hook_danted with ${DANTEDCONF}"
     cat >${DANTEDCONF} <<EOF
@@ -134,7 +140,7 @@ EOF
     pidof sockd >/dev/null && killall -9 sockd
     # 增加身份验证 https://github.com/Hagb/docker-easyconnect
     if [[ -n "$SOCKS_PASSWD" && -n "$SOCKS_USER" ]];then
-        cat >${DANTEDCONF} <<EOF
+        cat >/etc/pam.d/sockd <<EOF
 auth required pam_pwdfile.so pwdfile /etc/dante.passwd
 account required pam_permit.so
 EOF
@@ -145,7 +151,7 @@ EOF
     (while true; do
         if [ -d /sys/class/net/${interface} ]; then
             sockd -D -f ${DANTEDCONF}
-	        echo -e "\nstart danted\n"
+            echo -e "\nstart danted\n"
             break
         fi
         sleep 3
@@ -177,7 +183,7 @@ main() {
     echo "Running default main ..."
     hook_resources_conf
 
-    [ -n "$IPTABLES_LEGACY" ] && hook_iptables tun0 # IPTABLES_LEGACY=
+    [ -n "$NOIPTABLES" ] || hook_iptables tun0 # IPTABLES_LEGACY=
 
     run_cmd ECAgent background --resume
     start_easyconn
@@ -189,10 +195,14 @@ main() {
     keep='K'
     while true; do
         read -p " -> Enter 'XXX' to exit:" keep
-        if [ x"$keep" != x'XXX' ]; then
-            $keep
-	    else
+        if [ x"$keep" == x'XXX' ]; then
             break
+        elif [ x"$keep" == x'RRR' ]
+            [ -n "$QUIET" ] || echo "Reloading"
+            $EASYCONN logout
+            start_easyconn
+        else
+            $keep
         fi
     done
     [ -n "$QUIET" ] || echo "Run CMD: ${EASYCONN} logout"
