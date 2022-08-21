@@ -19,14 +19,10 @@ RUN echo "deb $DEBIAN_MIRROR $DEBIAN_CODENAME main contrib" > /etc/apt/sources.l
     && apt-get update \
     && apt-get install -y --no-install-recommends --no-install-suggests \
         tini busybox iptables psmisc dante-server \
-    && ln -s "$(which busybox)" /usr/local/bin/ps \
-    && ln -s "$(which busybox)" /usr/local/bin/ip \
-    && ln -s "$(which busybox)" /usr/local/bin/ifconfig \
-    && ln -s "$(which busybox)" /usr/local/bin/route \
-    && ln -s "$(which busybox)" /usr/local/bin/ping \
+    && busybox --install -s \
     && apt-get -y autoremove && apt-get clean \
     && rm -rf /var/lib/apt/lists/* /var/cache/* /var/logs/* /var/lib/dpkg/* \
-    && rm /usr/bin/tini-static \
+    && cd /usr/bin && rm tini-static peekfd prtstat pslog pstree pstree.x11 /bin/fuser\
     && ln -s /usr/sbin/danted /usr/sbin/sockd
 
 ADD ./easyconnect.sh /usr/bin/easyconnect.sh

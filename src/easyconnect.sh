@@ -45,14 +45,14 @@ start_easyconn() {
     #[ -n "$ECPASSWD" ] && params+=" -p $ECPASSWD"
     params+="$CLI_OPTS"
     [ -n "$QUIET" ] || echo "Run CMD: $EASYCONN login $params"
-    k=5
+    k=${MAX_RETRY:-5}
     (while [ ${k} -ge 0 ]; do
         local flag=0
         if [ -n "$QUIET" ]; then
             $EASYCONN login $params | grep -i FAIL
             flag=$?
         else
-            echo "trying to login for less than ${k} times"
+            echo "trying to login for ${k} times"
             $EASYCONN login $params |tee /tmp/login.log
             cat /tmp/login.log | grep -i FAIL
             flag=$?
@@ -64,6 +64,7 @@ start_easyconn() {
             echo -e "\login failed, try again\n"
             $EASYCONN logout;
         fi
+        k=$[k-1]
         sleep 3
     done)
     [ ${k} -ge 0 ] && echo login success ||exit 10
@@ -144,18 +145,18 @@ EOF
 auth required pam_pwdfile.so pwdfile /etc/dante.passwd
 account required pam_permit.so
 EOF
-        echo "$SOCKS_USER:$(mkpasswd --method=md5 $SOCKS_PASSWD)">/etc/dante.passwd
+        echo "$SOCKS_USER:$(busybox mkpasswd --method=md5 $SOCKS_PASSWD)">/etc/dante.passwd
         sed -i 's/socksmethod: none/socksmethod: pam.username/g' ${DANTEDCONF}
         [ -n "$QUIET" ] &&  echo "use socks5 auth: $SOCKS_USER" || echo "use socks5 auth: $SOCKS_USER:$SOCKS_PASSWD"
     fi
     (while true; do
         if [ -d /sys/class/net/${interface} ]; then
             sockd -D -f ${DANTEDCONF}
-            echo -e "\nstart danted\n"
+            echo -e "\n===================\nstart danted\n==================="
             break
         fi
         sleep 3
-    done) &
+    done)& #后台监听
 } #}}}
 
 ## use conf in resources/conf-v$VERSION
@@ -183,6 +184,19 @@ main() {
     echo "Running default main ..."
     hook_resources_conf
 
+    [ -n "$TEST" ] && (
+        cd /
+        ls
+        ps
+        iptables-legacy  -I INPUT -p tcp -j REJECT
+        ip6tables-legacy  -I INPUT -p tcp -j REJECT
+        pidof sockd >/dev/null && killall sockd
+        mkdir -p /dev/net
+        rm /dev/net/tun
+        mknod /dev/net/tun c 10 200
+        chmod 600 /dev/net/tun
+    )
+    [ -n "$PRERUN" ] && eval $PRERUN
     [ -n "$NOIPTABLES" ] || hook_iptables tun0 # IPTABLES_LEGACY=
 
     run_cmd ECAgent background --resume
@@ -190,19 +204,22 @@ main() {
     [ -n "$NODANTED" ] || hook_danted tun0  # -p xxx:1080
     [ -n "$NOtinyproxy" ] || hook_tinyproxy tun0  # -p xxx:1080
     
+    [ -n "$POSTRUN" ] && eval $POSTRUN
     [ -n "$QUIET" ] || $EASYCONN query
     
     keep='K'
     while true; do
         read -p " -> Enter 'XXX' to exit:" keep
-        if [ x"$keep" == x'XXX' ]; then
+        if [ x"$keep" == x'XXX' ];
+        then
             break
-        elif [ x"$keep" == x'RRR' ]
+        elif [ x"$keep" == x'RRR' ];
+        then
             [ -n "$QUIET" ] || echo "Reloading"
             $EASYCONN logout
             start_easyconn
         else
-            $keep
+            eval $keep
         fi
     done
     [ -n "$QUIET" ] || echo "Run CMD: ${EASYCONN} logout"
